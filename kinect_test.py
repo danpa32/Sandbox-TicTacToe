@@ -43,36 +43,49 @@ listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
 device.setIrAndDepthFrameListener(listener)
 device.start()
 
-BOARD_X, BOARD_Y = 90, 50
-CASE_WIDTH = 230
-MIN_HAND_HEIGHT = 230
+KINECT_W, KINECT_H = 512, 424
+BOARD_X, BOARD_Y = 80, 34
+CASE_WIDTH = 100
+BOARD_WIDTH = CASE_WIDTH * 3
+MIN_HAND_HEIGHT = 3500
+
+# Tkinter interface
+screen_w, screen_h = 1024, 768
+screen_dx, screen_dy = 1680, 0
+canvas_w, canvas_h = screen_w - 220, screen_h - 150
+canvas_dx, canvas_dy = 150, 180
+
+def map_scale(x, y):
+    return x * (canvas_w / float(KINECT_W)), y * (canvas_h / float(KINECT_H))
 
 def drawGrid(canvas, board):
+    O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
+    o_x, o_y = O_X, O_Y
+    case_w_in_canvas, __ = map_scale(CASE_WIDTH, 0)
     for x in range(Board.size):
         for y in range(Board.size):
-            canvas.create_rectangle(x * CASE_WIDTH + BOARD_X, y * CASE_WIDTH + BOARD_Y,CASE_WIDTH,CASE_WIDTH, width=5)
+            canvas.create_rectangle(o_x, o_y, o_x + case_w_in_canvas, o_y + case_w_in_canvas, width=5)
+            o_y += case_w_in_canvas
+        o_x += case_w_in_canvas
+        o_y = O_Y
 
 def detectHand(depth_map):
-    for row in xrange(0, depth_map.size, 10):
-        for col in xrange(0, row.size, 10):
-            if depth_map[row, col] > MIN_HAND_HEIGHT:
-                return True
-    return False
+    max, x, y = 0, 0, 0
+    for i_h in xrange(0, len(depth_map), 10):
+        for i_w in xrange(0, len(depth_map[i_h]), 10):
+            if depth_map[i_h][i_w] > max:
+                max = depth_map[i_h][i_w]
+                x, y = i_w, i_h
+    return max, x, y
 
-t = np.arange(6).reshape(2,3)
-
-print(detectHand(t))
+def get_board_depth_map(depth_map):
+    return depth_map[BOARD_Y:(BOARD_Y + BOARD_WIDTH), BOARD_X:(BOARD_X + BOARD_WIDTH)]
 
 fig = None
 img = None
 
 dmap_prev = None
 
-#tkinter interface
-screen_w, screen_h = 1024, 768
-screen_dx, screen_dy = 1680, 0
-canvas_w, canvas_h = screen_w - 220, screen_h - 150
-canvas_dx, canvas_dy = 150, 180
 # Create window
 root = tk.Tk()
 root.geometry("%dx%d+%d+%d" % (screen_w, screen_h, screen_dx, screen_dy))
@@ -98,13 +111,14 @@ while True:
     else:
         img.set_data(dmap)
 
-    # dmap = gaussian_filter(dmap, sigma=7)
+    board_dmap = get_board_depth_map(dmap)
+    print(detectHand(gaussian_filter(board_dmap, sigma=7)))
     norm = colors.Normalize(vmin=3340, vmax=3470)
     colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)
     image = Image.fromarray(np.uint8(colorized_dmap*255))
     image = image.resize((canvas_w, canvas_h), Image.ANTIALIAS)
     rgbImage = ImageTk.PhotoImage('RGB', image.size)
-    rgbImage.paste(image)    
+    rgbImage.paste(image)
     canvas.create_image(0, 0, anchor=tk.NW, image=rgbImage)
     drawGrid(canvas, None)
     canvas.place(x=canvas_dx, y=canvas_dy)

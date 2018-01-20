@@ -21,14 +21,7 @@ except:
     pipeline = CpuPacketPipeline()
 
 
-def initKinect():
-    None 
-
-def drawGrid(canvas, board):
-    canvas.create_line(0,0,400,400, width=5)
-    None
-
-
+# Kinext initilization
 
 # Create and set logger
 logger = createConsoleLogger(LoggerLevel.Debug)
@@ -50,6 +43,13 @@ listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
 device.setIrAndDepthFrameListener(listener)
 device.start()
 
+BOARD_X, BOARD_Y = 90, 50
+CASE_WIDTH = 230
+
+def drawGrid(canvas, board):
+    for x in range(Board.size):
+        for y in range(Board.size):
+            canvas.create_rectangle(x * CASE_WIDTH + BOARD_X, y * CASE_WIDTH + BOARD_Y,CASE_WIDTH,CASE_WIDTH, width=5)
 
 fig = None
 img = None
@@ -57,16 +57,18 @@ img = None
 dmap_prev = None
 
 #tkinter interface
-w, h = 1024, 768
-dx, dy = 1680, 0
+screen_w, screen_h = 1024, 768
+screen_dx, screen_dy = 1680, 0
+canvas_w, canvas_h = screen_w - 220, screen_h - 150
+canvas_dx, canvas_dy = 150, 180
 # Create window
 root = tk.Tk()
-root.geometry("%dx%d+%d+%d" % (w, h, dx, dy))
+root.geometry("%dx%d+%d+%d" % (screen_w, screen_h, screen_dx, screen_dy))
 root.bind("<Escape>", lambda e : (e.widget.withdraw(), e.widget.quit()))
 canvas = None
 # Fix canvas to window
-canvas = tk.Canvas(root, width=w, height=h)
-canvas.pack()
+canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
+canvas.place(x=canvas_dx, y=canvas_dy)
 canvas.configure(background="red")
 
 while True:
@@ -84,14 +86,16 @@ while True:
     else:
         img.set_data(dmap)
 
-    dmap = gaussian_filter(dmap, sigma=7)
+    # dmap = gaussian_filter(dmap, sigma=7)
     norm = colors.Normalize(vmin=3340, vmax=3470)
     colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)
     image = Image.fromarray(np.uint8(colorized_dmap*255))
+    image = image.resize((canvas_w, canvas_h), Image.ANTIALIAS)
     rgbImage = ImageTk.PhotoImage('RGB', image.size)
     rgbImage.paste(image)    
-    canvas.create_image(w/2, h/2, image=rgbImage)
-    canvas.pack()
+    canvas.create_image(0, 0, anchor=tk.NW, image=rgbImage)
+    drawGrid(canvas, None)
+    canvas.place(x=canvas_dx, y=canvas_dy)
     root.update()
 
     listener.release(frames)

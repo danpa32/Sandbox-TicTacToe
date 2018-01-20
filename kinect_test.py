@@ -45,11 +45,23 @@ device.start()
 
 BOARD_X, BOARD_Y = 90, 50
 CASE_WIDTH = 230
+MIN_HAND_HEIGHT = 230
 
 def drawGrid(canvas, board):
     for x in range(Board.size):
         for y in range(Board.size):
             canvas.create_rectangle(x * CASE_WIDTH + BOARD_X, y * CASE_WIDTH + BOARD_Y,CASE_WIDTH,CASE_WIDTH, width=5)
+
+def detectHand(depth_map):
+    for row in xrange(0, depth_map.size, 10):
+        for col in xrange(0, row.size, 10):
+            if depth_map[row, col] > MIN_HAND_HEIGHT:
+                return True
+    return False
+
+t = np.arange(6).reshape(2,3)
+
+print(detectHand(t))
 
 fig = None
 img = None

@@ -6,6 +6,7 @@ import pylab as pl
 from matplotlib import cm, colors
 from scipy.ndimage.filters import gaussian_filter
 import Tkinter as tk
+import tkFont
 from PIL import Image, ImageTk
 from pylibfreenect2 import Freenect2, SyncMultiFrameListener
 from pylibfreenect2 import FrameType, Registration, Frame
@@ -43,6 +44,9 @@ listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
 device.setIrAndDepthFrameListener(listener)
 device.start()
 
+SYMBOL_FONT = tkFont.Font(family='Helvetica',
+        size=36, weight='bold')
+
 KINECT_W, KINECT_H = 512, 424
 BOARD_X, BOARD_Y = 80, 34
 CASE_WIDTH = 100
@@ -79,7 +83,7 @@ def draw_grid(canvas, board):
     for x in range(Board.size):
         for y in range(Board.size):
             canvas.create_rectangle(o_x, o_y, o_x + case_w_in_canvas, o_y + case_w_in_canvas, width=5)
-            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[y][x])
+            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[y][x], font=SYMBOL_FONT)
             o_y += case_w_in_canvas
         o_x += case_w_in_canvas
         o_y = O_Y

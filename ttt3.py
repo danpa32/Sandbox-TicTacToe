@@ -24,9 +24,11 @@ class Board:
 
     def move(self, x, y):
         # board = Board(self)
-        self.grid[y][x] = self.player
-        (self.player, self.opponent) = (self.opponent, self.player)
-        return self
+        if self.grid[y][x] != self.player or self.grid[y][x] != self.opponent:
+            self.grid[y][x] = self.player
+            (self.player, self.opponent) = (self.opponent, self.player)
+            return True
+        return False
 
     def undo(self, x, y):
         self.grid[y][x] = self.empty

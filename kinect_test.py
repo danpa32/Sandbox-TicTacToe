@@ -75,19 +75,22 @@ def map_scale(x, y):
     return x * (canvas_w / float(KINECT_W)), y * (canvas_h / float(KINECT_H))
 
 
-def draw_grid(canvas, board, msg):
+def draw_grid(canvas, board, msg, winning_cases):
     O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
     o_x, o_y = O_X, O_Y
     case_w_in_canvas, __ = map_scale(CASE_WIDTH, 0)
+    board_width_canvas, __ = map_scale(BOARD_WIDTH, 0)
     for x in range(Board.size):
         for y in range(Board.size):
             canvas.create_rectangle(o_x, o_y, o_x + case_w_in_canvas, o_y + case_w_in_canvas, width=5)
-            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[y][x], font=SYMBOL_FONT)
+            fill_color = 'yellow' if (x, y) in winning_cases else 'black'
+            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[y][x], font=SYMBOL_FONT, fill=fill_color)
             o_y += case_w_in_canvas
         o_x += case_w_in_canvas
         o_y = O_Y
     if msg != None:
-        canvas.create_text(O_X + BOARD_WIDTH / 2, O_Y + BOARD_WIDTH / 2, text=msg, font=SYMBOL_FONT, fill='white')
+        canvas.create_text(O_X + board_width_canvas / 2, O_Y + board_width_canvas / 2,
+                           text=msg, font=SYMBOL_FONT, fill='white', angle=180, justify=tk.CENTER)
 
 
 def detect_hand(depth_map):
@@ -129,6 +132,9 @@ def get_most_diff_case(snapshot_dmap, actual_dmap):
 def reset_buf_dmap():
     return np.zeros((BOARD_WIDTH, BOARD_WIDTH))
 
+def reset_game():
+    t3_board = Board()
+
 
 t3_board = Board()
 
@@ -163,6 +169,9 @@ buf_dmap = reset_buf_dmap()
 count = 0
 wait_frame = 0
 message = None
+just_reseted = False
+finished = False
+winning_cases = []
 
 while True:
     frames, dmap = get_next_dmap()
@@ -171,29 +180,49 @@ while True:
     board_dmap = get_board_depth_map(dmap)
     gauss_board = gaussian_filter(board_dmap, sigma=1)
 
-    if detect_hand(gaussian_filter(board_dmap, sigma=7)):
-        isPlaying = True
-        count = 0
-        wait_frame = 0
-        buf_dmap = reset_buf_dmap()
-        message = None
-    # We wait some frames when the hand is not detected anymore, just to be sure
-    elif isPlaying and wait_frame < NB_WAITING_FRAME:
-        wait_frame += 1
-    elif isPlaying and count < NB_FRAME:
-        buf_dmap += gauss_board
-        count += 1
-    elif isPlaying and count == NB_FRAME:
-        # Check which case has been played
-        x, y, diff = get_most_diff_case(snapshot_dmap, buf_dmap)
-        # If diff is big enough play on detected case
-        if diff > MIN_DIFF_ACCEPTED:
-            t3_board.move(x, y)
-            message = None
-        else:
-            message = "case not detected"
-        snapshot_dmap = buf_dmap
-        isPlaying = False
+    if np.average(dmap) > 4400:
+        t3_board = Board()
+        just_reseted = True
+        finished = False
+    else:
+        if detect_hand(gaussian_filter(board_dmap, sigma=7)):
+            isPlaying = True
+            count = 0
+            wait_frame = 0
+            buf_dmap = reset_buf_dmap()
+            if not finished:
+                message = None
+        # We wait some frames when the hand is not detected anymore, just to be sure
+        elif isPlaying and wait_frame < NB_WAITING_FRAME:
+            wait_frame += 1
+        elif isPlaying and count < NB_FRAME:
+            buf_dmap += gauss_board
+            count += 1
+        elif isPlaying and count == NB_FRAME and not finished:
+            # Check which case has been played
+            x, y, diff = get_most_diff_case(snapshot_dmap, buf_dmap)
+            print(diff)
+            # If diff is big enough play on detected case
+            if diff > MIN_DIFF_ACCEPTED:
+                if not t3_board.move(x, y):
+                    message = "You can't\nplay there!"
+                else:
+                    message = None
+                    winning_cases = t3_board.won()
+                    if len(winning_cases) > 0:
+                        message = "END!\n" + t3_board.opponent + " has won."
+                        finished = True
+                    elif t3_board.tied():
+                        message = "End by\ndraw!"
+                        finished = True
+            else:
+                if just_reseted:
+                    just_reseted = False
+                    message = "Game reset!"
+                else:
+                    message = "Case not\ndetected!\nTry again!"
+            snapshot_dmap = buf_dmap
+            isPlaying = False
 
     norm = colors.Normalize(vmin=3340, vmax=3470)
     colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)
@@ -202,7 +231,7 @@ while True:
     rgbImage = ImageTk.PhotoImage('RGB', image.size)
     rgbImage.paste(image)
     canvas.create_image(0, 0, anchor=tk.NW, image=rgbImage)
-    draw_grid(canvas, t3_board)
+    draw_grid(canvas, t3_board, message, winning_cases)
     canvas.place(x=canvas_dx, y=canvas_dy)
     root.update()
     listener.release(frames)

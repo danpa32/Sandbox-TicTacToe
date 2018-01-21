@@ -24,7 +24,7 @@ class Board:
 
     def move(self, x, y):
         # board = Board(self)
-        if self.grid[y][x] != self.player or self.grid[y][x] != self.opponent:
+        if self.grid[y][x] == self.empty:
             self.grid[y][x] = self.player
             (self.player, self.opponent) = (self.opponent, self.player)
             return True
@@ -93,6 +93,7 @@ class Board:
                     winning += 1
             if winning == self.size:
                 return pos
+        return []
 
     def __str__(self):
         string = ''

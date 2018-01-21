@@ -50,6 +50,7 @@ SYMBOL_FONT = tkFont.Font(family='Helvetica',
 KINECT_W, KINECT_H = 512, 424
 BOARD_X, BOARD_Y = 80, 34
 CASE_WIDTH = 100
+CASE_MARGIN_DETECT = CASE_WIDTH / 4
 BOARD_WIDTH = CASE_WIDTH * 3
 MIN_HAND_HEIGHT = 3500
 
@@ -106,7 +107,8 @@ def get_board_depth_map(depth_map):
 
 
 def get_dmap_case(x, y, board_depthmap):
-    return board_depthmap[y*CASE_WIDTH: y*CASE_WIDTH + CASE_WIDTH, x*CASE_WIDTH: x*CASE_WIDTH+CASE_WIDTH]
+    return board_depthmap[y * CASE_WIDTH + CASE_MARGIN_DETECT: y * CASE_WIDTH + CASE_WIDTH - CASE_MARGIN_DETECT,
+           x * CASE_WIDTH + CASE_MARGIN_DETECT: x * CASE_WIDTH + CASE_WIDTH - CASE_MARGIN_DETECT]
 
 
 def get_most_diff_case(snapshot_dmap, actual_dmap):
@@ -151,6 +153,7 @@ isPlaying = False
 
 buf_dmap = reset_buf_dmap()
 NB_FRAME = 10
+NB_WAITING_FRAME = 10
 
 # Get initial depth map snapshot
 for i in range(NB_FRAME):
@@ -160,8 +163,9 @@ for i in range(NB_FRAME):
 snapshot_dmap = buf_dmap
 buf_dmap = reset_buf_dmap()
 
-
 count = 0
+wait_frame = 0
+
 while True:
     frames, dmap = get_next_dmap()
 
@@ -173,7 +177,10 @@ while True:
         print('Hand')
         isPlaying = True
         count = 0
+        wait_frame = 0
         buf_dmap = reset_buf_dmap()
+    elif isPlaying and wait_frame < NB_WAITING_FRAME:
+        wait_frame += 1
     elif isPlaying and count < NB_FRAME:
         buf_dmap += gauss_board
         count += 1

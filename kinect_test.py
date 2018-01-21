@@ -21,13 +21,13 @@ except:
     pipeline = CpuPacketPipeline()
 
 
-# Kinext initilization
+# Kinect initialization
 
 # Create and set logger
 logger = createConsoleLogger(LoggerLevel.Debug)
 setGlobalLogger(logger)
 
-# Check that kinnect is connected
+# Check that kinect is connected
 fn = Freenect2()
 num_devices = fn.enumerateDevices()
 if num_devices == 0:
@@ -52,13 +52,27 @@ MIN_HAND_HEIGHT = 3500
 # Tkinter interface
 screen_w, screen_h = 1024, 768
 screen_dx, screen_dy = 1680, 0
-canvas_w, canvas_h = screen_w - 220, screen_h - 150
+canvas_w, canvas_h = screen_w - 265, screen_h - 155
 canvas_dx, canvas_dy = 150, 180
+
+
+def get_next_dmap():
+    frames = listener.waitForNewFrame()
+
+    depth = frames["depth"]
+
+    # depth is measured in millimeters and stored as a 512x424 float32 array
+    depth_map = depth.asarray()
+    depth_map = np.clip(4500 - depth_map, 0, 4500)
+
+    return frames, depth_map[:, ::-1]
+
 
 def map_scale(x, y):
     return x * (canvas_w / float(KINECT_W)), y * (canvas_h / float(KINECT_H))
 
-def drawGrid(canvas, board):
+
+def draw_grid(canvas, board):
     O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
     o_x, o_y = O_X, O_Y
     case_w_in_canvas, __ = map_scale(CASE_WIDTH, 0)
@@ -70,22 +84,44 @@ def drawGrid(canvas, board):
         o_x += case_w_in_canvas
         o_y = O_Y
 
-def detectHand(depth_map):
-    max, x, y = 0, 0, 0
+
+def detect_hand(depth_map):
+    #max, x, y = 0, 0, 0
     for i_h in xrange(0, len(depth_map), 10):
         for i_w in xrange(0, len(depth_map[i_h]), 10):
-            if depth_map[i_h][i_w] > max:
-                max = depth_map[i_h][i_w]
-                x, y = i_w, i_h
-    return max, x, y
+            if depth_map[i_h][i_w] > MIN_HAND_HEIGHT:
+                return True
+                #max = depth_map[i_h][i_w]
+                #x, y = i_w, i_h
+    #return max, x, y
+    return False
+
 
 def get_board_depth_map(depth_map):
     return depth_map[BOARD_Y:(BOARD_Y + BOARD_WIDTH), BOARD_X:(BOARD_X + BOARD_WIDTH)]
 
-fig = None
-img = None
 
-dmap_prev = None
+def get_dmap_case(x, y, board_depthmap):
+    return board_depthmap[y*CASE_WIDTH: y*CASE_WIDTH + CASE_WIDTH, x*CASE_WIDTH: x*CASE_WIDTH+CASE_WIDTH]
+
+
+def get_most_diff_case(snapshot_dmap, actual_dmap):
+    diff_dmap = actual_dmap - snapshot_dmap
+    max_diff, max_x, max_y = 0, 0, 0
+    for x in range(Board.size):
+        for y in range(Board.size):
+            case_diff_map = get_dmap_case(x, y, diff_dmap)
+            case_diff = np.median(np.abs(case_diff_map))
+            print(x, y, case_diff)
+            if case_diff > max_diff:
+                max_diff = case_diff
+                max_x, max_y = x, y
+
+    return max_x, max_y
+
+
+def reset_buf_dmap():
+    return np.zeros((BOARD_WIDTH, BOARD_WIDTH))
 
 t3_board = Board()
 
@@ -105,23 +141,43 @@ canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
 canvas.place(x=canvas_dx, y=canvas_dy)
 canvas.configure(background="red")
 
+fig = None
+img = None
+isPlaying = False
+
+buf_dmap = reset_buf_dmap()
+NB_FRAME = 10
+
+# Get initial depth map snapshot
+for i in range(NB_FRAME):
+    frames, dmap = get_next_dmap()
+    listener.release(frames)
+    buf_dmap += gaussian_filter(get_board_depth_map(dmap), sigma=1)
+snapshot_dmap = buf_dmap
+buf_dmap = reset_buf_dmap()
+
+
+count = 0
 while True:
-    frames = listener.waitForNewFrame()
+    frames, dmap = get_next_dmap()
 
-    depth = frames["depth"]
-
-    # depth is measured in millimeters and stored as a 512x424 float32 array
-    dmap = depth.asarray()
-    dmap = np.clip(4500 - dmap, 0, 4500)
-    dmap = dmap[:,::-1]
-
-    if img is None:
-        img = pl.imshow(dmap, vmin=3340, vmax=3470)
-    else:
-        img.set_data(dmap)
-
+    # Crop depth map to keep only the board inbound
     board_dmap = get_board_depth_map(dmap)
-    print(detectHand(gaussian_filter(board_dmap, sigma=7)))
+    gauss_board = gaussian_filter(board_dmap, sigma=1)
+
+    if detect_hand(gaussian_filter(board_dmap, sigma=7)):
+        print('Hand')
+        isPlaying = True
+        count = 0
+        buf_dmap = reset_buf_dmap()
+    elif isPlaying and count < NB_FRAME:
+        buf_dmap += gauss_board
+        count += 1
+    elif isPlaying and count == NB_FRAME:
+        isPlaying = False
+        print(get_most_diff_case(snapshot_dmap, buf_dmap))
+        snapshot_dmap = buf_dmap
+
     norm = colors.Normalize(vmin=3340, vmax=3470)
     colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)
     image = Image.fromarray(np.uint8(colorized_dmap*255))
@@ -129,10 +185,9 @@ while True:
     rgbImage = ImageTk.PhotoImage('RGB', image.size)
     rgbImage.paste(image)
     canvas.create_image(0, 0, anchor=tk.NW, image=rgbImage)
-    drawGrid(canvas, t3_board)
+    draw_grid(canvas, t3_board)
     canvas.place(x=canvas_dx, y=canvas_dy)
     root.update()
-
     listener.release(frames)
 
 device.stop()

@@ -40,12 +40,10 @@ device = fn.openDevice(serial, pipeline=pipeline)
 
 listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
 
-# Register listeners
+# Register listener and start detection
 device.setIrAndDepthFrameListener(listener)
 device.start()
 
-SYMBOL_FONT = tkFont.Font(family='Helvetica',
-        size=36, weight='bold')
 
 KINECT_W, KINECT_H = 512, 424
 BOARD_X, BOARD_Y = 80, 34
@@ -53,6 +51,7 @@ CASE_WIDTH = 100
 CASE_MARGIN_DETECT = CASE_WIDTH / 4
 BOARD_WIDTH = CASE_WIDTH * 3
 MIN_HAND_HEIGHT = 3500
+MIN_DIFF_ACCEPTED = 12
 
 # Tkinter interface
 screen_w, screen_h = 1024, 768
@@ -123,19 +122,14 @@ def get_most_diff_case(snapshot_dmap, actual_dmap):
                 max_diff = case_diff
                 max_x, max_y = x, y
 
-    return max_x, max_y
+    return max_x, max_y, max_diff
 
 
 def reset_buf_dmap():
     return np.zeros((BOARD_WIDTH, BOARD_WIDTH))
 
+
 t3_board = Board()
-
-# Filling board for testing
-for x in range(Board.size):
-    for y in range(Board.size):
-        t3_board.grid[y][x] = str(y * Board.size + x)
-
 
 # Create window
 root = tk.Tk()
@@ -146,6 +140,8 @@ canvas = None
 canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
 canvas.place(x=canvas_dx, y=canvas_dy)
 canvas.configure(background="red")
+
+SYMBOL_FONT = tkFont.Font(family="Helvetica", size=72, weight='bold')
 
 fig = None
 img = None
@@ -165,6 +161,7 @@ buf_dmap = reset_buf_dmap()
 
 count = 0
 wait_frame = 0
+message = None
 
 while True:
     frames, dmap = get_next_dmap()
@@ -174,20 +171,28 @@ while True:
     gauss_board = gaussian_filter(board_dmap, sigma=1)
 
     if detect_hand(gaussian_filter(board_dmap, sigma=7)):
-        print('Hand')
         isPlaying = True
         count = 0
         wait_frame = 0
         buf_dmap = reset_buf_dmap()
+        message = None
+    # We wait some frames when the hand is not detected anymore, just to be sure
     elif isPlaying and wait_frame < NB_WAITING_FRAME:
         wait_frame += 1
     elif isPlaying and count < NB_FRAME:
         buf_dmap += gauss_board
         count += 1
     elif isPlaying and count == NB_FRAME:
-        isPlaying = False
-        print(get_most_diff_case(snapshot_dmap, buf_dmap))
+        # Check which case has been played
+        x, y, diff = get_most_diff_case(snapshot_dmap, buf_dmap)
+        # If diff is big enough play on detected case
+        if diff > MIN_DIFF_ACCEPTED:
+            t3_board.move(x, y)
+            message = None
+        else:
+            message = "case not detected"
         snapshot_dmap = buf_dmap
+        isPlaying = False
 
     norm = colors.Normalize(vmin=3340, vmax=3470)
     colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)

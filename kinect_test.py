@@ -65,7 +65,7 @@ def drawGrid(canvas, board):
     for x in range(Board.size):
         for y in range(Board.size):
             canvas.create_rectangle(o_x, o_y, o_x + case_w_in_canvas, o_y + case_w_in_canvas, width=5)
-            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[x, y])
+            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[y][x])
             o_y += case_w_in_canvas
         o_x += case_w_in_canvas
         o_y = O_Y
@@ -92,7 +92,7 @@ t3_board = Board()
 # Filling board for testing
 for x in range(Board.size):
     for y in range(Board.size):
-        t3_board.grid[x, y] = x * Board.size + y
+        t3_board.grid[y][x] = str(y * Board.size + x)
 
 
 # Create window

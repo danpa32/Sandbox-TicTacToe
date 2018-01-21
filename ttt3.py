@@ -16,7 +16,7 @@ class Board:
         self.player = 'X'
         self.opponent = 'O'
         self.empty = '.'
-        self.grid = [[self.empty for y in range(self.size)] for x in range(self.size)]
+        self.grid = [[self.empty for x in range(self.size)] for y in range(self.size)]
 
         # copy constructor
         if other:
@@ -24,12 +24,12 @@ class Board:
 
     def move(self, x, y):
         # board = Board(self)
-        self.grid[x][y] = self.player
+        self.grid[y][x] = self.player
         (self.player, self.opponent) = (self.opponent, self.player)
         return self
 
     def undo(self, x, y):
-        self.grid[x][y] = self.empty
+        self.grid[y][x] = self.empty
         (self.player, self.opponent) = (self.opponent, self.player)
         return self
 
@@ -45,7 +45,7 @@ class Board:
             best = (-2, None)
             for x in range(self.size):
                 for y in range(self.size):
-                    if self.grid[x][y] == self.empty:
+                    if self.grid[y][x] == self.empty:
                         value, __ = self.move(x, y).__minimax(not player)
                         self.undo(x, y)
                         if value > best[0]:
@@ -55,7 +55,7 @@ class Board:
             best = (+2, None)
             for x in range(self.size):
                 for y in range(self.size):
-                    if self.grid[x][y] == self.empty:
+                    if self.grid[y][x] == self.empty:
                         value, __ = self.move(x, y).__minimax(not player)
                         self.undo(x, y)
                         if value < best[0]:
@@ -68,7 +68,7 @@ class Board:
     def tied(self):
         for x in range(self.size):
             for y in range(self.size):
-                if self.grid[x][y] == self.empty:
+                if self.grid[y][x] == self.empty:
                     return False
         return True
 
@@ -87,15 +87,15 @@ class Board:
         for pos in Board.winPossibilities:
             winning = 0
             for x, y in pos:
-                if self.grid[x][y] == self.opponent:
+                if self.grid[y][x] == self.opponent:
                     winning += 1
             if winning == self.size:
                 return pos
 
     def __str__(self):
         string = ''
-        for y in range(self.size):
-            for x in range(self.size):
-                string += self.grid[x][y]
+        for y in reversed(range(self.size)):
+            for x in reversed(range(self.size)):
+                string += self.grid[y][x]
             string += "\n"
         return string

@@ -65,6 +65,7 @@ def drawGrid(canvas, board):
     for x in range(Board.size):
         for y in range(Board.size):
             canvas.create_rectangle(o_x, o_y, o_x + case_w_in_canvas, o_y + case_w_in_canvas, width=5)
+            canvas.create_text(o_x + case_w_in_canvas/2, o_y + case_w_in_canvas/2, text=board.grid[x, y])
             o_y += case_w_in_canvas
         o_x += case_w_in_canvas
         o_y = O_Y
@@ -85,6 +86,14 @@ fig = None
 img = None
 
 dmap_prev = None
+
+t3_board = Board()
+
+# Filling board for testing
+for x in range(Board.size):
+    for y in range(Board.size):
+        t3_board.grid[x, y] = x * Board.size + y
+
 
 # Create window
 root = tk.Tk()
@@ -120,7 +129,7 @@ while True:
     rgbImage = ImageTk.PhotoImage('RGB', image.size)
     rgbImage.paste(image)
     canvas.create_image(0, 0, anchor=tk.NW, image=rgbImage)
-    drawGrid(canvas, None)
+    drawGrid(canvas, t3_board)
     canvas.place(x=canvas_dx, y=canvas_dy)
     root.update()
 

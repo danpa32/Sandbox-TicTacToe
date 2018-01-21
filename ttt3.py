@@ -22,17 +22,6 @@ class Board:
         if other:
             self.__dict__ = deepcopy(other.__dict__)
 
-    def getPos(self, x, y):
-        mask = int(1) << (x * 4 + y)
-        for symbol, grid in self.bytesGrid.items():
-            if grid & mask:
-                return symbol
-        return None
-
-    def setPos(self, x, y, symbol):
-        mask = int(1) << (x * 4 + y)
-        self.bytesGrid[symbol] = self.bytesGrid[symbol] | mask
-
     def move(self, x, y):
         # board = Board(self)
         self.grid[x][y] = self.player

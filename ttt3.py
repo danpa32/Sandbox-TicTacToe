@@ -17,6 +17,8 @@ class Board:
         self.opponent = 'O'
         self.empty = ' '
         self.grid = [[self.empty for x in range(self.size)] for y in range(self.size)]
+        self.winning_cases = []
+        self.finished = False
 
         # copy constructor
         if other:
@@ -72,6 +74,7 @@ class Board:
             for y in range(self.size):
                 if self.grid[y][x] == self.empty:
                     return False
+        self.finished = True
         return True
 
     winPossibilities = [
@@ -92,8 +95,9 @@ class Board:
                 if self.grid[y][x] == self.opponent:
                     winning += 1
             if winning == self.size:
+                self.finished = True
                 return pos
-        return []
+        return self.winning_cases
 
     def __str__(self):
         string = ''

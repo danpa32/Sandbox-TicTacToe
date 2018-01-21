@@ -9,7 +9,7 @@ import tkFont
 from PIL import Image, ImageTk
 from pylibfreenect2 import Freenect2, SyncMultiFrameListener
 from pylibfreenect2 import FrameType, Registration, Frame
-from ttt3 import Board
+from tictactoe_board import Board
 
 try:
     from pylibfreenect2 import OpenGLPacketPipeline
@@ -130,7 +130,6 @@ def get_most_diff_case(snapshot_dmap, actual_dmap):
         for y in range(Board.size):
             case_diff_map = get_dmap_case(x, y, diff_dmap)
             case_diff = np.median(np.abs(case_diff_map))
-            print(x, y, case_diff)
             if case_diff > max_diff:
                 max_diff = case_diff
                 max_x, max_y = x, y
@@ -235,8 +234,11 @@ root.bind("<Right>", move_canvas_right)
 root.bind("<Up>", move_canvas_up)
 root.bind("<Down>", move_canvas_down)
 root.bind("<KP_0>", reset_canvas_pos)
+root.bind("<0>", reset_canvas_pos)
 root.bind("<KP_Add>", zoom_in_canvas)
 root.bind("<KP_Subtract>", zoom_out_canvas)
+root.bind("<i>", zoom_in_canvas)
+root.bind("<o>", zoom_out_canvas)
 canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
 canvas.place(x=canvas_dx, y=canvas_dy)
 canvas.configure(background=BACKGROUND_COLOR)
@@ -284,7 +286,6 @@ while running:
         elif isPlaying and count == NB_FRAME and not board.finished:
             # Check which case has been played
             x, y, diff = get_most_diff_case(snapshot_dmap, buf_dmap)
-            print(diff)
             # If diff is big enough play on detected case
             if diff > MIN_DIFF_ACCEPTED:
                 if not board.move(x, y):

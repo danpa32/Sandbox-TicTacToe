@@ -15,7 +15,7 @@ class Board:
     def __init__(self, other=None):
         self.player = 'X'
         self.opponent = 'O'
-        self.empty = '.'
+        self.empty = ' '
         self.grid = [[self.empty for x in range(self.size)] for y in range(self.size)]
 
         # copy constructor

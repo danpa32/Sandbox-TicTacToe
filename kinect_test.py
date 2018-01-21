@@ -1,5 +1,4 @@
 # coding: utf-8
-
 import numpy as np
 import sys
 import pylab as pl
@@ -51,12 +50,19 @@ CASE_MARGIN_DETECT = CASE_WIDTH / 4
 BOARD_WIDTH = CASE_WIDTH * 3
 MIN_HAND_HEIGHT = 3500
 MIN_DIFF_ACCEPTED = 11
+NB_FRAME = 10
+NB_WAITING_FRAME = 10
 
 # Tkinter interface
 screen_w, screen_h = 1024, 768
 screen_dx, screen_dy = 1680, 0
 canvas_w, canvas_h = screen_w - 265, screen_h - 155
 canvas_dx, canvas_dy = 150, 180
+
+# Display settings
+BACKGROUND_COLOR = 'cyan'
+MESSAGE_COLOR = 'white'
+background = True
 
 
 def get_next_dmap():
@@ -75,11 +81,29 @@ def map_scale(x, y):
     return x * (canvas_w / float(KINECT_W)), y * (canvas_h / float(KINECT_H))
 
 
-def draw_grid(canvas, board, msg):
+def draw_message(msg):
+    global canvas
+    O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
+    board_width_canvas, __ = map_scale(BOARD_WIDTH, 0)
+    if msg is not None:
+        canvas.create_text(O_X + board_width_canvas / 2, O_Y + board_width_canvas / 2,
+                           text=msg, font=SYMBOL_FONT, fill=MESSAGE_COLOR, angle=180, justify=tk.CENTER)
+
+
+def draw_current_player():
+    global canvas, board
+    O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
+    board_width_canvas, __ = map_scale(BOARD_WIDTH, 0)
+    if not board.finished:
+        canvas.create_text(O_X + board_width_canvas, O_Y + board_width_canvas + 10,
+            text="Now playing: " + board.player, font=STATUS_FONT, fill=MESSAGE_COLOR, angle=180, anchor=tk.SW)
+
+
+def draw_board():
+    global canvas, board
     O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
     o_x, o_y = O_X, O_Y
     case_w_in_canvas, __ = map_scale(CASE_WIDTH, 0)
-    board_width_canvas, __ = map_scale(BOARD_WIDTH, 0)
     for x in range(Board.size):
         for y in range(Board.size):
             canvas.create_rectangle(o_x, o_y, o_x + case_w_in_canvas, o_y + case_w_in_canvas, width=5)
@@ -88,9 +112,16 @@ def draw_grid(canvas, board, msg):
             o_y += case_w_in_canvas
         o_x += case_w_in_canvas
         o_y = O_Y
-    if msg != None:
-        canvas.create_text(O_X + board_width_canvas / 2, O_Y + board_width_canvas / 2,
-                           text=msg, font=SYMBOL_FONT, fill='white', angle=180, justify=tk.CENTER)
+
+
+def draw_grid(msg):
+    draw_board()
+    draw_message(msg)
+    draw_current_player()
+
+
+def display_background():
+    global canvas, background
 
 
 def detect_hand(depth_map):
@@ -128,27 +159,43 @@ def get_most_diff_case(snapshot_dmap, actual_dmap):
 def reset_buf_dmap():
     return np.zeros((BOARD_WIDTH, BOARD_WIDTH))
 
-t3_board = Board()
+
+def toggle_background(event):
+    global background
+    background = not background
+
+
+def build_depth_rgb_image():
+    norm = colors.Normalize(vmin=3340, vmax=3470)
+    colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)
+    image = Image.fromarray(np.uint8(colorized_dmap * 255))
+    image = image.resize((canvas_w, canvas_h), Image.ANTIALIAS)
+    rgb_image = ImageTk.PhotoImage('RGB', image.size)
+    rgb_image.paste(image)
+    return rgb_image
+
+
+board = Board()
 
 # Create window
 root = tk.Tk()
 root.geometry("%dx%d+%d+%d" % (screen_w, screen_h, screen_dx, screen_dy))
 root.bind("<Escape>", lambda e : (e.widget.withdraw(), e.widget.quit()))
+root.bind("<b>", toggle_background)
 canvas = None
+
 # Fix canvas to window
 canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
 canvas.place(x=canvas_dx, y=canvas_dy)
-canvas.configure(background="red")
+canvas.configure(background=BACKGROUND_COLOR)
 
 SYMBOL_FONT = tkFont.Font(family="Helvetica", size=72, weight='bold')
-
+STATUS_FONT = tkFont.Font(family="Helvetica", size=36, weight='bold')
 fig = None
 img = None
 isPlaying = False
 
 buf_dmap = reset_buf_dmap()
-NB_FRAME = 10
-NB_WAITING_FRAME = 10
 
 # Get initial depth map snapshot
 for i in range(NB_FRAME):
@@ -173,7 +220,7 @@ while True:
     gauss_board = gaussian_filter(board_dmap, sigma=1)
 
     if np.average(dmap) > 4400:
-        t3_board = Board()
+        board = Board()
         just_reseted = True
         finished = False
     else:
@@ -182,7 +229,7 @@ while True:
             count = 0
             wait_frame = 0
             buf_dmap = reset_buf_dmap()
-            if not t3_board.finished:
+            if not board.finished:
                 message = None
         # We wait some frames when the hand is not detected anymore, just to be sure
         elif isPlaying and wait_frame < NB_WAITING_FRAME:
@@ -190,20 +237,20 @@ while True:
         elif isPlaying and count < NB_FRAME:
             buf_dmap += gauss_board
             count += 1
-        elif isPlaying and count == NB_FRAME and not t3_board.finished:
+        elif isPlaying and count == NB_FRAME and not board.finished:
             # Check which case has been played
             x, y, diff = get_most_diff_case(snapshot_dmap, buf_dmap)
             print(diff)
             # If diff is big enough play on detected case
             if diff > MIN_DIFF_ACCEPTED:
-                if not t3_board.move(x, y):
+                if not board.move(x, y):
                     message = "You can't\nplay there!"
                 else:
                     message = None
-                    winning_cases = t3_board.won()
+                    winning_cases = board.won()
                     if len(winning_cases) > 0:
-                        message = "END!\n" + t3_board.opponent + " has won."
-                    elif t3_board.tied():
+                        message = "END!\n" + board.opponent + " has won."
+                    elif board.tied():
                         message = "End by\ndraw!"
             else:
                 if just_reseted:
@@ -214,14 +261,14 @@ while True:
             snapshot_dmap = buf_dmap
             isPlaying = False
 
-    norm = colors.Normalize(vmin=3340, vmax=3470)
-    colorized_dmap = pl.cm.ScalarMappable(norm=norm).to_rgba(dmap)
-    image = Image.fromarray(np.uint8(colorized_dmap*255))
-    image = image.resize((canvas_w, canvas_h), Image.ANTIALIAS)
-    rgbImage = ImageTk.PhotoImage('RGB', image.size)
-    rgbImage.paste(image)
-    canvas.create_image(0, 0, anchor=tk.NW, image=rgbImage)
-    draw_grid(canvas, t3_board, message)
+
+    if background:
+        rgb_image = build_depth_rgb_image()
+        canvas.create_image(0, 0, anchor=tk.NW, image=rgb_image)
+    else:
+        canvas.create_rectangle(0, 0, canvas_w, canvas_h, fill=BACKGROUND_COLOR)
+
+    draw_grid(message)
     canvas.place(x=canvas_dx, y=canvas_dy)
     root.update()
     listener.release(frames)

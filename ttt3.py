@@ -95,6 +95,7 @@ class Board:
                 if self.grid[y][x] == self.opponent:
                     winning += 1
             if winning == self.size:
+                self.winning_cases = pos
                 self.finished = True
                 return pos
         return self.winning_cases

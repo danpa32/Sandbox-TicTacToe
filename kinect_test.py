@@ -9,8 +9,6 @@ import tkFont
 from PIL import Image, ImageTk
 from pylibfreenect2 import Freenect2, SyncMultiFrameListener
 from pylibfreenect2 import FrameType, Registration, Frame
-from pylibfreenect2 import createConsoleLogger, setGlobalLogger
-from pylibfreenect2 import LoggerLevel
 from ttt3 import Board
 
 try:
@@ -21,29 +19,9 @@ except:
     pipeline = CpuPacketPipeline()
 
 
-# Kinect initialization
-
-# Create and set logger
-logger = createConsoleLogger(LoggerLevel.Debug)
-setGlobalLogger(logger)
-
-# Check that kinect is connected
-fn = Freenect2()
-num_devices = fn.enumerateDevices()
-if num_devices == 0:
-    print("No device connected!")
-    sys.exit(1)
-
-serial = fn.getDeviceSerialNumber(0)
-device = fn.openDevice(serial, pipeline=pipeline)
-
-listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
-
-# Register listener and start detection
-device.setIrAndDepthFrameListener(listener)
-device.start()
-
 KINECT_W, KINECT_H = 512, 424
+SCREEN_DX, SCREEN_DY = 1680, 0
+SCREEN_W, SCREEN_H = 1024, 768
 BOARD_X, BOARD_Y = 80, 34
 CASE_WIDTH = 100
 CASE_MARGIN_DETECT = CASE_WIDTH / 4
@@ -53,16 +31,14 @@ MIN_DIFF_ACCEPTED = 11
 NB_FRAME = 10
 NB_WAITING_FRAME = 10
 
-# Tkinter interface
-screen_w, screen_h = 1024, 768
-screen_dx, screen_dy = 1680, 0
-canvas_w, canvas_h = screen_w - 265, screen_h - 155
-canvas_dx, canvas_dy = 150, 180
-
 # Display settings
 BACKGROUND_COLOR = 'cyan'
 MESSAGE_COLOR = 'white'
 background = True
+
+# Calibrate board position
+canvas_w, canvas_h = SCREEN_W - 265, SCREEN_H - 155
+canvas_dx, canvas_dy = 150, 180
 
 
 def get_next_dmap():
@@ -175,36 +151,47 @@ def build_depth_rgb_image():
     return rgb_image
 
 
-board = Board()
+def init_depth_snapshot():
+    # Get initial depth map snapshot
+    buf = reset_buf_dmap()
+    for i in range(NB_FRAME):
+        frames, dmap = get_next_dmap()
+        listener.release(frames)
+        buf += gaussian_filter(get_board_depth_map(dmap), sigma=1)
+    return buf
 
-# Create window
+
+# Kinect initialization
+fn = Freenect2()
+num_devices = fn.enumerateDevices()
+if num_devices == 0:
+    print("No device connected!")
+    sys.exit(1)
+serial = fn.getDeviceSerialNumber(0)
+device = fn.openDevice(serial, pipeline=pipeline)
+listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
+device.setIrAndDepthFrameListener(listener)
+device.start()
+
+# Create tKinter interface
 root = tk.Tk()
-root.geometry("%dx%d+%d+%d" % (screen_w, screen_h, screen_dx, screen_dy))
+root.geometry("%dx%d+%d+%d" % (SCREEN_W, SCREEN_H, SCREEN_DX, SCREEN_DY))
+canvas = None
 root.bind("<Escape>", lambda e : (e.widget.withdraw(), e.widget.quit()))
 root.bind("<b>", toggle_background)
-canvas = None
-
-# Fix canvas to window
 canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
 canvas.place(x=canvas_dx, y=canvas_dy)
 canvas.configure(background=BACKGROUND_COLOR)
 
 SYMBOL_FONT = tkFont.Font(family="Helvetica", size=72, weight='bold')
 STATUS_FONT = tkFont.Font(family="Helvetica", size=36, weight='bold')
-fig = None
-img = None
+
+
+# Global variables
+board = Board()
+snapshot_dmap = init_depth_snapshot()
+buf_dmap = reset_buf_dmap()
 isPlaying = False
-
-buf_dmap = reset_buf_dmap()
-
-# Get initial depth map snapshot
-for i in range(NB_FRAME):
-    frames, dmap = get_next_dmap()
-    listener.release(frames)
-    buf_dmap += gaussian_filter(get_board_depth_map(dmap), sigma=1)
-snapshot_dmap = buf_dmap
-buf_dmap = reset_buf_dmap()
-
 count = 0
 wait_frame = 0
 message = None
@@ -260,7 +247,6 @@ while True:
                     message = "Case not\ndetected!\nTry again!"
             snapshot_dmap = buf_dmap
             isPlaying = False
-
 
     if background:
         rgb_image = build_depth_rgb_image()

@@ -44,7 +44,6 @@ listener = SyncMultiFrameListener(FrameType.Ir | FrameType.Depth)
 device.setIrAndDepthFrameListener(listener)
 device.start()
 
-
 KINECT_W, KINECT_H = 512, 424
 BOARD_X, BOARD_Y = 80, 34
 CASE_WIDTH = 100
@@ -76,7 +75,7 @@ def map_scale(x, y):
     return x * (canvas_w / float(KINECT_W)), y * (canvas_h / float(KINECT_H))
 
 
-def draw_grid(canvas, board):
+def draw_grid(canvas, board, msg):
     O_X, O_Y = map_scale(BOARD_X, BOARD_Y)
     o_x, o_y = O_X, O_Y
     case_w_in_canvas, __ = map_scale(CASE_WIDTH, 0)
@@ -87,6 +86,8 @@ def draw_grid(canvas, board):
             o_y += case_w_in_canvas
         o_x += case_w_in_canvas
         o_y = O_Y
+    if msg != None:
+        canvas.create_text(O_X + BOARD_WIDTH / 2, O_Y + BOARD_WIDTH / 2, text=msg, font=SYMBOL_FONT, fill='white')
 
 
 def detect_hand(depth_map):

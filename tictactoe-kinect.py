@@ -23,9 +23,15 @@ KINECT_W, KINECT_H = 512, 424
 SCREEN_DX, SCREEN_DY = 1680, 0
 SCREEN_W, SCREEN_H = 1024, 768
 BOARD_X, BOARD_Y = 80, 34
+DEFAULT_CANVAS_W, DEFAULT_CANVAS_H = SCREEN_W - 265, SCREEN_H - 155
+DEFAULT_CANVAS_DX, DEFAULT_CANVAS_DY = 150, 180
+
 CASE_WIDTH = 100
 CASE_MARGIN_DETECT = CASE_WIDTH / 4
 BOARD_WIDTH = CASE_WIDTH * 3
+MOVE_STEP = 5
+ZOOM_STEP = 5
+
 MIN_HAND_HEIGHT = 3500
 MIN_DIFF_ACCEPTED = 11
 NB_FRAME = 10
@@ -37,8 +43,8 @@ MESSAGE_COLOR = 'white'
 background = True
 
 # Calibrate board position
-canvas_w, canvas_h = SCREEN_W - 265, SCREEN_H - 155
-canvas_dx, canvas_dy = 150, 180
+canvas_w, canvas_h = DEFAULT_CANVAS_W, DEFAULT_CANVAS_H
+canvas_dx, canvas_dy = DEFAULT_CANVAS_DX, DEFAULT_CANVAS_DY
 
 
 def get_next_dmap():
@@ -136,10 +142,6 @@ def reset_buf_dmap():
     return np.zeros((BOARD_WIDTH, BOARD_WIDTH))
 
 
-def toggle_background(event):
-    global background
-    background = not background
-
 
 def build_depth_rgb_image():
     norm = colors.Normalize(vmin=3340, vmax=3470)
@@ -161,6 +163,55 @@ def init_depth_snapshot():
     return buf
 
 
+def toggle_background(event):
+    global background
+    background = not background
+
+
+def quit(event):
+    global running
+    running = False
+    # e.widget.withdraw(), e.widget.quit()
+
+
+def move_canvas_left(event):
+    global canvas_dx
+    canvas_dx += MOVE_STEP
+
+
+def move_canvas_right(event):
+    global canvas_dx
+    canvas_dx -= MOVE_STEP
+
+
+def move_canvas_up(event):
+    global canvas_dy
+    canvas_dy += MOVE_STEP
+
+
+def move_canvas_down(event):
+    global canvas_dy
+    canvas_dy -= MOVE_STEP
+
+
+def reset_canvas_pos(event):
+    global canvas_dx, canvas_dy, canvas_h, canvas_w
+    canvas_w, canvas_h = DEFAULT_CANVAS_W, DEFAULT_CANVAS_H
+    canvas_dx, canvas_dy = DEFAULT_CANVAS_DX, DEFAULT_CANVAS_DY
+
+
+def zoom_in_canvas(event):
+    global canvas_w, canvas_h
+    canvas_h += ZOOM_STEP
+    canvas_w += ZOOM_STEP
+
+
+def zoom_out_canvas(event):
+    global canvas_w, canvas_h
+    canvas_h -= ZOOM_STEP
+    canvas_w -= ZOOM_STEP
+
+
 # Kinect initialization
 fn = Freenect2()
 num_devices = fn.enumerateDevices()
@@ -177,8 +228,15 @@ device.start()
 root = tk.Tk()
 root.geometry("%dx%d+%d+%d" % (SCREEN_W, SCREEN_H, SCREEN_DX, SCREEN_DY))
 canvas = None
-root.bind("<Escape>", lambda e : (e.widget.withdraw(), e.widget.quit()))
+root.bind("<Escape>", quit)
 root.bind("<b>", toggle_background)
+root.bind("<Left>", move_canvas_left)
+root.bind("<Right>", move_canvas_right)
+root.bind("<Up>", move_canvas_up)
+root.bind("<Down>", move_canvas_down)
+root.bind("<KP_0>", reset_canvas_pos)
+root.bind("<KP_Add>", zoom_in_canvas)
+root.bind("<KP_Subtract>", zoom_out_canvas)
 canvas = tk.Canvas(root, width=canvas_w, height=canvas_h)
 canvas.place(x=canvas_dx, y=canvas_dy)
 canvas.configure(background=BACKGROUND_COLOR)
@@ -188,6 +246,7 @@ STATUS_FONT = tkFont.Font(family="Helvetica", size=36, weight='bold')
 
 
 # Global variables
+running = True
 board = Board()
 snapshot_dmap = init_depth_snapshot()
 buf_dmap = reset_buf_dmap()
@@ -196,10 +255,8 @@ count = 0
 wait_frame = 0
 message = None
 just_reseted = False
-finished = False
-winning_cases = []
 
-while True:
+while running:
     frames, dmap = get_next_dmap()
 
     # Crop depth map to keep only the board inbound
@@ -207,9 +264,9 @@ while True:
     gauss_board = gaussian_filter(board_dmap, sigma=1)
 
     if np.average(dmap) > 4400:
+        del board
         board = Board()
         just_reseted = True
-        finished = False
     else:
         if detect_hand(gaussian_filter(board_dmap, sigma=7)):
             isPlaying = True
@@ -218,7 +275,7 @@ while True:
             buf_dmap = reset_buf_dmap()
             if not board.finished:
                 message = None
-        # We wait some frames when the hand is not detected anymore, just to be sure
+        # We wait some frames when the hand is not detected anymore, just to be sure we have a clean depth_map
         elif isPlaying and wait_frame < NB_WAITING_FRAME:
             wait_frame += 1
         elif isPlaying and count < NB_FRAME:
@@ -239,13 +296,13 @@ while True:
                         message = "END!\n" + board.opponent + " has won."
                     elif board.tied():
                         message = "End by\ndraw!"
+                snapshot_dmap = buf_dmap
             else:
                 if just_reseted:
                     just_reseted = False
                     message = "Game reset!"
                 else:
                     message = "Case not\ndetected!\nTry again!"
-            snapshot_dmap = buf_dmap
             isPlaying = False
 
     if background:
@@ -258,6 +315,9 @@ while True:
     canvas.place(x=canvas_dx, y=canvas_dy)
     root.update()
     listener.release(frames)
+    del board_dmap
+    del dmap
+
 
 device.stop()
 device.close()
